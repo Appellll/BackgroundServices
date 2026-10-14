@@ -17,12 +17,13 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.flagging.Flags
+import kotlin.math.abs
 
 class TrackerService : Service(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-    private val NOTIFICATION_CHANNEL_ID_SERVICES_RUNNING = "tracker_service_running"
+    private val NOTIFICATION_CHANNEL_ID_SERVICE_RUNNING = "tracker_service_running"
     private val NOTIFICATION_CHANNEL_ID_JUMP_DETECTED = "tracker_jump_detected"
     private val NOTIFICATION_ID_SERVICE_RUNNING = 1
     private val NOTIFICATION_ID_JUMP_DETECTED = 2
@@ -32,7 +33,7 @@ class TrackerService : Service(), SensorEventListener {
             val manager = getSystemService(NotificationManager::class.java)
 
             val serviceChannel = NotificationChannel(
-                NOTIFICATION_ID_SERVICE_RUNNING,
+                NOTIFICATION_CHANNEL_ID_SERVICE_RUNNING,
                 "Service Running Channel",
                 NotificationManager.IMPORTANCE_LOW
             )
@@ -82,7 +83,7 @@ class TrackerService : Service(), SensorEventListener {
             this,0,notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID_SERVICES_RUNNING)
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID_SERVICE_RUNNING)
             .setContentTitle("Pelacak Aktivitas")
             .setContentText("Aplikasi Tracker Service sedang berjalan..")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -133,15 +134,16 @@ class TrackerService : Service(), SensorEventListener {
         }
     }
 
-    override fun onBind(intent: Intent): IBinder {
-        TODO("Return the communication channel to the service.")
+    override fun onDestroy() {
+        super.onDestroy()
+        sensorManager.unregisterListener(this)
+        Log.d("TrackerService","Service onDestroy")
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        TODO("Not yet implemented")
+    override fun onBind(p0: Intent?): IBinder? {
+        return null
     }
 
-    override fun onSensorChanged(event: SensorEvent?) {
-        TODO("Not yet implemented")
+    override fun onAccuracyChanged(p0: Sensor?, p1: Int) {
     }
 }

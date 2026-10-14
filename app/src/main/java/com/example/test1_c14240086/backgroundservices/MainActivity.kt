@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (allPermissionGranted){
                 val serviceIntent = Intent(this, TrackerService::class.java)
-                startForegroundService(serviceIntent)
+                startTrackerService(serviceIntent)
                 finish()
             }else{
                 statusTextView.text = "Izin Ditolak, Service tidak dapat dijalankan."
