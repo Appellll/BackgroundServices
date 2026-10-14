@@ -27,6 +27,10 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        btnStart = findViewById<Button>(R.id.btnStart)
+        statusTextView = findViewById<TextView>(R.id.statusTextView)
+
+
         btnStart.setOnClickListener {
             if (hasAllPermissions()){
                 startTrackerService()
@@ -94,7 +98,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (allPermissionGranted){
                 val serviceIntent = Intent(this, TrackerService::class.java)
-                startTrackerService(serviceIntent)
+                ContextCompat.startForegroundService(this,serviceIntent)
                 finish()
             }else{
                 statusTextView.text = "Izin Ditolak, Service tidak dapat dijalankan."
@@ -108,7 +112,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onNewintent(intent: Intent){
+    override fun onNewIntent(intent: Intent){
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
