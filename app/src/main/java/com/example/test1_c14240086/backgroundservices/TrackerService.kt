@@ -16,7 +16,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.flagging.Flags
 import kotlin.math.abs
 
 class TrackerService : Service(), SensorEventListener {
@@ -28,8 +27,12 @@ class TrackerService : Service(), SensorEventListener {
     private val NOTIFICATION_ID_SERVICE_RUNNING = 1
     private val NOTIFICATION_ID_JUMP_DETECTED = 2
 
-    private fun createNotificationChannels(){
-        if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
+    private var isLatihanMode = false
+    private var stepCount = 0
+    private var lastAboveThreshold = false
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
 
             val serviceChannel = NotificationChannel(
@@ -57,87 +60,139 @@ class TrackerService : Service(), SensorEventListener {
         Log.d("TrackerService", "Service onCreate")
     }
 
-    private fun startJumpDetection(){
+    private fun startJumpDetection() {
         accelerometer?.also {
             sensorManager.registerListener(
-                this,it, SensorManager.SENSOR_DELAY_NORMAL
+                this, it, SensorManager.SENSOR_DELAY_NORMAL
             )
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int{
-        Log.d("TrackerService","Service onStartCommand")
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("TrackerService", "Service onStartCommand")
+
+        isLatihanMode = intent?.getStringExtra("MODE") == "LATIHAN"
+        stepCount = 0
+        lastAboveThreshold = false
+
+        val title = if (isLatihanMode) "Mode Latihan Berjalan" else "Pelacak Aktivitas"
+        val text = if (isLatihanMode) "Mendeteksi langkah (threshold 12)..." else "Aplikasi Tracker Service sedang berjalan.."
 
         startForeground(
             NOTIFICATION_ID_SERVICE_RUNNING,
-            buildServiceRunningNotification()
+            buildServiceRunningNotification(title, text)
         )
 
         startJumpDetection()
         return START_STICKY
     }
 
-    private fun buildServiceRunningNotification(): Notification {
+    private fun buildServiceRunningNotification(title: String, text: String): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
-            this,0,notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID_SERVICE_RUNNING)
-            .setContentTitle("Pelacak Aktivitas")
-            .setContentText("Aplikasi Tracker Service sedang berjalan..")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
-    override fun onSensorChanged (event: SensorEvent?){
-        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER){
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
             val y = event.values[1]
-            val jumpThreshold = 15.0
 
-            if (abs(y)>jumpThreshold){
-                Log.d("TrackService", "Lompatan Terdeteksi! y: $y")
+            if (isLatihanMode) {
+                val threshold = 12.0
+                if (abs(y) > threshold) {
+                    if (!lastAboveThreshold) {
+                        stepCount++
+                        lastAboveThreshold = true
+                        Log.d("TrackerService", "Langkah terdeteksi! Step count: $stepCount, y: $y")
 
-                sensorManager.unregisterListener(this)
-
-                showJumpNotification()
-                stopSelf()
+                        if (stepCount > 2) {
+                            sensorManager.unregisterListener(this)
+                            showLatihanCompletedNotification()
+                            stopSelf()
+                        }
+                    }
+                } else {
+                    lastAboveThreshold = false
+                }
+            } else {
+                val jumpThreshold = 15.0
+                if (abs(y) > jumpThreshold) {
+                    Log.d("TrackerService", "Lompatan Terdeteksi! y: $y")
+                    sensorManager.unregisterListener(this)
+                    showJumpNotification()
+                    stopSelf()
+                }
             }
         }
     }
 
-    private fun showJumpNotification(){
-        val mainActivityIntent = Intent (this, MainActivity::class.java).apply {
+    private fun showJumpNotification() {
+        val mainActivityIntent = Intent(this, MainActivity::class.java).apply {
             action = MainActivity.ACTION_SERVICE_STOPPED_JUMP
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
 
         val pendingMainActivityIntent = PendingIntent.getActivity(
-            this,1,mainActivityIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this, 1, mainActivityIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val jumpNotification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID_JUMP_DETECTED)
             .setContentTitle("Lompatan Terdeteksi")
             .setContentText("Service Berhenti. Ketuk buka aplikasi")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setAutoCancel(true)
+            .setContentIntent(pendingMainActivityIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
         try {
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID_JUMP_DETECTED, jumpNotification)
-        }catch (e: SecurityException){
-            Log.e("TrackerService","Gagal memunculkan notif: ${e.message}")
+        } catch (e: SecurityException) {
+            Log.e("TrackerService", "Gagal memunculkan notif: ${e.message}")
+        }
+    }
+
+    private fun showLatihanCompletedNotification() {
+        val mainActivityIntent = Intent(this, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_LATIHAN_SELESAI
+            putExtra("EXTRA_STEP_COUNT", stepCount)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+
+        val pendingMainActivityIntent = PendingIntent.getActivity(
+            this, 2, mainActivityIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val latihanNotification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID_JUMP_DETECTED)
+            .setContentTitle("Latihan Selesai")
+            .setContentText("Total Lompatan: $stepCount. Ketuk untuk lihat & buat event kalender.")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setAutoCancel(true)
+            .setContentIntent(pendingMainActivityIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID_JUMP_DETECTED, latihanNotification)
+        } catch (e: SecurityException) {
+            Log.e("TrackerService", "Gagal memunculkan notif latihan: ${e.message}")
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         sensorManager.unregisterListener(this)
-        Log.d("TrackerService","Service onDestroy")
+        Log.d("TrackerService", "Service onDestroy")
     }
 
     override fun onBind(p0: Intent?): IBinder? {
