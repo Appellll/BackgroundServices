@@ -21,4 +21,10 @@
         android:text="Mulai Lacak Aktivitas"
         android:id="@+id/btnStart"/>
 
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Mulai Latihan"
+        android:id="@+id/btnLatihan"/>
+
 </LinearLayout>
