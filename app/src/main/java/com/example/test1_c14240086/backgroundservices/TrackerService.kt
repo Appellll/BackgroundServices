@@ -51,7 +51,7 @@ class TrackerService : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         createNotificationChannels()
         Log.d("TrackerService", "Service onCreate")
